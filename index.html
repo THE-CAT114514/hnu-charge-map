@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d2e">
+  <meta name="description" content="海南大学海甸校区街电充电桩实时状态">
+  <title>海大充电地图 · 街电</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="assets/styles.css?v=20261116d">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="海大充电地图">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M13.2 2 4 14h6.2L9 22l10-12h-6l.2-8Z"/></svg>
+        </span>
+        <span class="brand__copy">
+          <strong>海大充电地图</strong>
+          <span>街电 · 海南大学海甸校区</span>
+        </span>
+      </a>
+      <div class="topbar__actions">
+        <span class="snapshot-pill snapshot-pill--snapshot" id="headerModePill">
+          <span class="snapshot-pill__dot"></span>
+          <span id="headerModeText">截图快照</span>
+        </span>
+        <button class="button button--ghost" id="infoButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          数据说明
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="map-shell" aria-label="充电桩地图">
+        <div id="map" class="map"></div>
+
+        <div class="map-overlay">
+          <article class="snapshot-card" id="snapshotCard" aria-live="polite"></article>
+          <div class="map-tools">
+            <button class="icon-button" id="recenterButton" type="button" aria-label="回到第一运动场">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="map-caption" id="mapCaption">底图 © 高德地图 · 桩位为近似示意</div>
+      </section>
+
+      <aside class="panel" aria-label="点位详情">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">示例点位</p>
+            <h1><span id="panelTitle">第一运动场（1期）</span> <span class="panel-head__total" id="panelPileCount">4 台桩</span></h1>
+          </div>
+          <span class="live-pill live-pill--snapshot" id="livePill">
+            <span class="live-pill__dot"></span>
+            <span id="livePillText">截图快照</span>
+          </span>
+        </div>
+
+        <div class="station-list" id="stationList"></div>
+
+        <section class="detail" id="detail" aria-live="polite"></section>
+
+        <footer class="panel-footer">
+          <p id="dataFootnote">当前为截图快照；实时接口连通后每 60 秒自动刷新。</p>
+          <div class="panel-footer__row">
+            <button class="text-button" id="footerInfoButton" type="button">查看数据来源与限制</button>
+            <button class="text-button text-button--tip" id="footerTipButton" type="button">赞赏支持</button>
+            <a class="text-button text-button--feedback" href="mailto:a461589871@icloud.com">反馈与建议 <span class="text-button__mail">a461589871@icloud.com</span></a>
+          </div>
+        </footer>
+      </aside>
+    </main>
+  </div>
+
+  <dialog class="info-dialog" id="infoDialog" aria-labelledby="infoTitle">
+    <div class="info-dialog__head">
+      <div>
+        <p class="eyebrow">数据说明</p>
+        <h2 id="infoTitle">接口实时数据 + 截图回退</h2>
+      </div>
+      <button class="icon-button" id="closeDialogButton" type="button" aria-label="关闭">×</button>
+    </div>
+
+    <div class="info-dialog__body">
+      <dl class="facts">
+        <div><dt>数据来源</dt><dd id="dialogSource">街电小程序 scan-code 接口</dd></div>
+        <div><dt>采集时间</dt><dd id="dialogSnapshotTime">示例数据</dd></div>
+        <div><dt>已确认点位</dt><dd>3 个示例点位 · 12 台桩</dd></div>
+        <div><dt>接口 token</dt><dd id="dialogToken">未配置</dd></div>
+      </dl>
+
+      <div class="notice">
+        <strong id="dataModeNotice">页面优先请求实时接口。</strong>每 60 秒刷新；接口不可用或 token 过期时，回退到最近一次截图快照。
+      </div>
+
+      <h3>已确认的状态</h3>
+      <p id="dialogStatusText">示例数据：12 台桩各 12 个充电口；状态码 0=空闲，1/2=不可用（按小程序端口页颜色反推）。</p>
+
+      <h3>位置与底图</h3>
+      <p>示例数据的坐标是占位值，仅用于演示。复现时把二维码照片 GPS（WGS-84）转换为高德 GCJ-02，再将同一列的桩沿直线对齐、按俯视图整理成方阵；这些位置只表示相对顺序，不代表精确坐标。底图使用高德瓦片，公开部署前需要确认授权。</p>
+
+      <h3>12 台桩（示例）</h3>
+      <p>仓库内置 3 个示例站点、12 台桩，桩码、坐标和端口状态都是占位值；线上站点使用的是真实采集数据，不会随仓库发布。按 docs/DEPLOY.md 的「新增点位」拍摄你身边的二维码，用 tools 生成数据，替换 assets/data.js 和 server.py 里的 DEVICES / STATIONS 即可。</p>
+
+      <p class="facts__ref">接口 token 是微信小程序登录态，约 7 天有效；只放在本地服务器的环境变量里，不进入浏览器。</p>
+    </div>
+
+    <div class="info-dialog__actions">
+      <button class="button button--primary" id="dialogDoneButton" type="button">知道了</button>
+    </div>
+  </dialog>
+
+  <dialog class="info-dialog tip-dialog" id="tipDialog" aria-labelledby="tipTitle">
+    <div class="info-dialog__head">
+      <div>
+        <p class="eyebrow">赞赏支持</p>
+        <h2 id="tipTitle">用爱发电</h2>
+      </div>
+      <button class="icon-button" id="closeTipButton" type="button" aria-label="关闭">×</button>
+    </div>
+
+    <div class="info-dialog__body tip-dialog__body">
+      <p class="tip-dialog__copy">本网站为学生自主开发的用爱发电项目，程序开发与运维不易，欢迎打赏。</p>
+      <img class="tip-qr" src="assets/tip-qr.png" alt="微信赞赏收款码" width="480" height="512">
+      <p class="tip-dialog__hint">微信扫一扫，请作者喝杯饮料</p>
+    </div>
+
+    <div class="info-dialog__actions">
+      <button class="button button--primary" id="tipDoneButton" type="button">知道了</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="assets/config.js?v=20261116d"></script>
+  <script src="assets/data.js?v=20261116d"></script>
+  <script src="assets/app.js?v=20261116d"></script>
+</body>
+</html>

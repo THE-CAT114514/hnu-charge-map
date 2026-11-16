@@ -1,0 +1,25 @@
+https://:8443 {
+    tls /etc/caddy/hnu.crt /etc/caddy/hnu.key
+
+    encode gzip
+
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+    }
+
+    handle_path /guest/* {
+        reverse_proxy 127.0.0.1:8791
+    }
+
+    handle /guest {
+        redir /guest/ 308
+    }
+
+    handle {
+        basicauth {
+            hnu REPLACE_WITH_BCRYPT_HASH
+        }
+        reverse_proxy 127.0.0.1:8791
+    }
+}

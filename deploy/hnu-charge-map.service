@@ -1,0 +1,22 @@
+[Unit]
+Description=HNU charge map
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hnu
+Group=hnu
+WorkingDirectory=/opt/hnu-charge-map
+EnvironmentFile=-/etc/hnu-charge-map.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/hnu-charge-map/server.py --host 127.0.0.1 --port 8791
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

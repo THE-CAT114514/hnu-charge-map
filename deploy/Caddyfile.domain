@@ -1,0 +1,24 @@
+charge.example.com {
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000;"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+    }
+
+    handle_path /guest/* {
+        reverse_proxy 127.0.0.1:8791
+    }
+
+    handle /guest {
+        redir /guest/ 308
+    }
+
+    handle {
+        basicauth {
+            hnu REPLACE_WITH_BCRYPT_HASH
+        }
+        reverse_proxy 127.0.0.1:8791
+    }
+}

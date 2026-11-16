@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.log
+
+# 本地配置与凭证
+.env
+.env.*
+
+# 底图瓦片缓存：版权原因不入库，见 tiles/README.md
+tiles/*
+!tiles/README.md
