@@ -662,7 +662,7 @@
       if (typeof dialog.close === "function") dialog.close();
       else dialog.removeAttribute("open");
     };
-    const trigger = document.getElementById("footerTipButton");
+    const trigger = document.getElementById("topTipButton");
     if (trigger) trigger.addEventListener("click", open);
     ["closeTipButton", "tipDoneButton"].forEach((id) => {
       const button = document.getElementById(id);

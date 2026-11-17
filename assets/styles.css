@@ -1546,3 +1546,18 @@ svg {
   font-size: 9px;
   letter-spacing: 0;
 }
+
+.button--tip svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 480px) {
+  .button--tip svg {
+    display: none;
+  }
+}
