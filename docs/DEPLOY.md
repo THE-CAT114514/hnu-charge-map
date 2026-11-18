@@ -291,6 +291,24 @@ tileUrl: "tiles/{z}/{x}/{y}.png"
 
 注意：高德瓦片使用 GCJ-02 坐标系，和 `data.js` 里的坐标一致；如果换成 OpenStreetMap 等 WGS-84 底图，桩位会偏移几百米，需要额外做坐标转换。
 
+## 9.1 异常接口检测
+
+服务端会记录每个接口的占用开始时间和短时占用事件：
+
+- 短时占用：一次占用在 `SHORT_SESSION_SECONDS`（默认 600 秒）内又恢复空闲
+- 统计窗口：`ABNORMAL_WINDOW_SECONDS`（默认 24 小时）
+- 达到 `ABNORMAL_EVENT_LIMIT`（默认 3 次）即标记为异常
+
+三个阈值都可以用环境变量覆盖，例如在 systemd 单元或环境文件里加：
+
+```
+Environment=SHORT_SESSION_SECONDS=600
+Environment=ABNORMAL_WINDOW_SECONDS=86400
+Environment=ABNORMAL_EVENT_LIMIT=3
+```
+
+检测精度受轮询间隔（60 秒）限制，短于一个轮询周期的占用/空闲切换可能漏记。
+
 ## 10. 日常维护
 
 ```bash

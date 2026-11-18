@@ -25,6 +25,9 @@ TZ = timezone(timedelta(hours=8))
 STATE_FILE = Path(os.environ.get("STATE_FILE") or (ROOT / ".state" / "occupied.json"))
 STATE_LOCK = threading.Lock()
 OCCUPIED = {}
+SHORT_SESSION_SECONDS = int(os.environ.get("SHORT_SESSION_SECONDS", "600"))
+ABNORMAL_WINDOW_SECONDS = int(os.environ.get("ABNORMAL_WINDOW_SECONDS", str(24 * 3600)))
+ABNORMAL_EVENT_LIMIT = int(os.environ.get("ABNORMAL_EVENT_LIMIT", "3"))
 
 DEVICES = [
     {"id": "xua10001", "code": "XUA10001", "label": "1号桩", "power": 1200, "station": "first-field"},
@@ -77,9 +80,24 @@ def load_occupied():
         if not isinstance(slots, dict):
             continue
         bucket = {}
-        for slot_id, since in slots.items():
+        for slot_id, value in slots.items():
             try:
-                bucket[str(slot_id)] = float(since)
+                if isinstance(value, dict):
+                    record = {}
+                    if value.get("since") is not None:
+                        record["since"] = float(value["since"])
+                    events = []
+                    for item in value.get("events") or []:
+                        try:
+                            events.append(float(item))
+                        except (TypeError, ValueError):
+                            continue
+                    if events:
+                        record["events"] = events
+                    if record:
+                        bucket[str(slot_id)] = record
+                else:
+                    bucket[str(slot_id)] = {"since": float(value), "events": []}
             except (TypeError, ValueError):
                 continue
         if bucket:
@@ -108,10 +126,22 @@ def annotate_durations(piles):
             for slot in pile["slots"]:
                 key = str(slot["slotId"])
                 valid.add(key)
-                if int(slot.get("status", 0)) != 0:
-                    bucket.setdefault(key, now)
+                record = bucket.get(key)
+                if not isinstance(record, dict):
+                    record = {"events": []}
+                record.setdefault("events", [])
+                status = int(slot.get("status", 0))
+                if status != 0:
+                    record.setdefault("since", now)
                 else:
+                    since = record.pop("since", None)
+                    if since is not None and now - since <= SHORT_SESSION_SECONDS:
+                        record["events"].append(now)
+                record["events"] = [item for item in record["events"] if now - item <= ABNORMAL_WINDOW_SECONDS]
+                if record.get("since") is None and not record["events"]:
                     bucket.pop(key, None)
+                else:
+                    bucket[key] = record
             for key in list(bucket):
                 if key not in valid:
                     bucket.pop(key, None)
@@ -120,7 +150,10 @@ def annotate_durations(piles):
         for pile in piles:
             bucket = OCCUPIED.get(pile["code"], {})
             for slot in pile["slots"]:
-                since = bucket.get(str(slot["slotId"]))
+                record = bucket.get(str(slot["slotId"]), {})
+                events = record.get("events", []) if isinstance(record, dict) else []
+                slot["abnormal"] = len(events) >= ABNORMAL_EVENT_LIMIT
+                since = record.get("since") if isinstance(record, dict) else None
                 if since is None or int(slot.get("status", 0)) == 0:
                     continue
                 slot["busySince"] = datetime.fromtimestamp(since, TZ).isoformat(timespec="seconds")

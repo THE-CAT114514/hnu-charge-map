@@ -1683,3 +1683,47 @@ svg {
   font-size: 10px;
   line-height: 1.5;
 }
+
+.port {
+  position: relative;
+}
+
+.port--abnormal,
+.port--abnormal.port--free {
+  border-color: #b28be0;
+  background: #f4edff;
+  color: #6b3fa0;
+}
+
+.port__flag {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: #7b4bb7;
+  color: #fff;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.legend__swatch--abnormal {
+  border-color: #b28be0;
+  background: #f4edff;
+}
+
+.duration-summary li.is-abnormal span {
+  color: #6b3fa0;
+}
+
+.abnormal-tag {
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #f0e4ff;
+  color: #6b3fa0;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+}

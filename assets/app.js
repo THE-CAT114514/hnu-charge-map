@@ -114,7 +114,8 @@
       const seconds = free ? null : slotBusySeconds(slot);
       const value = free ? "空闲" : (seconds != null ? formatDurationLong(seconds) : "占用中");
       const tone = free ? "is-free" : (seconds != null ? "is-busy" : "is-unknown");
-      return `<li class="${tone}"><span>${slot.slotId} 号口</span><strong>${value}</strong></li>`;
+      const abnormal = Boolean(slot.abnormal);
+      return `<li class="${tone}${abnormal ? " is-abnormal" : ""}"><span>${slot.slotId} 号口${abnormal ? ' <em class="abnormal-tag">异常</em>' : ""}</span><strong>${value}</strong></li>`;
     }).join("");
     return `<section class="duration-summary"><h3>${escapeHtml(pile.label)} · 各接口充电时长</h3><ul>${items}</ul><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
   }
@@ -278,11 +279,15 @@
     const portSlots = getPileSlots(pile);
     const ports = portSlots.map((slot) => {
       const free = slotIsFree(slot);
+      const abnormal = Boolean(slot.abnormal);
       const seconds = !free ? slotBusySeconds(slot) : null;
       const label = free ? "空闲" : (showDurations && seconds != null ? formatDurationCompact(seconds) : "不可用");
-      const title = !free && showDurations && seconds != null ? ` title="已充电 ${formatDurationLong(seconds)}"` : "";
+      const title = abnormal
+        ? ` title="该接口近期多次短时占用后恢复空闲，可能接触不良${!free && showDurations && seconds != null ? `；当前已充电 ${formatDurationLong(seconds)}` : ""}"`
+        : (!free && showDurations && seconds != null ? ` title="已充电 ${formatDurationLong(seconds)}"` : "");
       return `
-        <div class="port ${free ? "port--free" : ""}" aria-label="充电口 ${slot.slotId}，${free ? "空闲" : label}"${title}>
+        <div class="port${free ? " port--free" : ""}${abnormal ? " port--abnormal" : ""}" aria-label="充电口 ${slot.slotId}，${free ? "空闲" : label}${abnormal ? "，异常" : ""}"${title}>
+          ${abnormal ? '<span class="port__flag">异常</span>' : ""}
           <span class="port__icon">${PLUG_ICON}</span>
           <span class="port__num">${slot.slotId}</span>
           <span class="port__label">${label}</span>
@@ -332,6 +337,7 @@
           <div class="legend" aria-hidden="true">
             <span class="legend__item"><i class="legend__swatch legend__swatch--free"></i>空闲</span>
             <span class="legend__item"><i class="legend__swatch"></i>不可用</span>
+            <span class="legend__item"><i class="legend__swatch legend__swatch--abnormal"></i>异常</span>
           </div>
         </div>
 
