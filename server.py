@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import os
+from copy import deepcopy
 import threading
 import time
 import urllib.error
@@ -21,6 +22,9 @@ TOKEN = os.environ.get("ZHUMANG_TOKEN", "").strip()
 CACHE_TTL = 60
 FORCE_COOLDOWN = 30
 TZ = timezone(timedelta(hours=8))
+STATE_FILE = Path(os.environ.get("STATE_FILE") or (ROOT / ".state" / "occupied.json"))
+STATE_LOCK = threading.Lock()
+OCCUPIED = {}
 
 DEVICES = [
     {"id": "xua10001", "code": "XUA10001", "label": "1号桩", "power": 1200, "station": "first-field"},
@@ -59,6 +63,79 @@ class TokenExpired(ApiError):
 
 def now_iso():
     return datetime.now(TZ).isoformat(timespec="seconds")
+
+
+def load_occupied():
+    try:
+        raw = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    state = {}
+    for code, slots in raw.items():
+        if not isinstance(slots, dict):
+            continue
+        bucket = {}
+        for slot_id, since in slots.items():
+            try:
+                bucket[str(slot_id)] = float(since)
+            except (TypeError, ValueError):
+                continue
+        if bucket:
+            state[str(code)] = bucket
+    return state
+
+
+def save_occupied():
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = STATE_FILE.with_name(STATE_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(OCCUPIED, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, STATE_FILE)
+    except OSError as error:
+        print("state save failed:", error)
+
+
+def annotate_durations(piles):
+    global OCCUPIED
+    now = time.time()
+    with STATE_LOCK:
+        for pile in piles:
+            code = pile["code"]
+            bucket = OCCUPIED.setdefault(code, {})
+            valid = set()
+            for slot in pile["slots"]:
+                key = str(slot["slotId"])
+                valid.add(key)
+                if int(slot.get("status", 0)) != 0:
+                    bucket.setdefault(key, now)
+                else:
+                    bucket.pop(key, None)
+            for key in list(bucket):
+                if key not in valid:
+                    bucket.pop(key, None)
+            if not bucket:
+                OCCUPIED.pop(code, None)
+        for pile in piles:
+            bucket = OCCUPIED.get(pile["code"], {})
+            for slot in pile["slots"]:
+                since = bucket.get(str(slot["slotId"]))
+                if since is None or int(slot.get("status", 0)) == 0:
+                    continue
+                slot["busySince"] = datetime.fromtimestamp(since, TZ).isoformat(timespec="seconds")
+                slot["busySeconds"] = max(0, int(now - since))
+        save_occupied()
+
+
+def strip_durations(payload):
+    data = deepcopy(payload)
+    for station in data.get("stations", []):
+        for pile in station.get("piles", []):
+            for slot in pile.get("slots", []):
+                slot.pop("busySince", None)
+                slot.pop("busySeconds", None)
+    return data
 
 
 def token_expiry():
@@ -168,6 +245,8 @@ def fetch_status():
     if not piles:
         raise ApiError("; ".join(errors) or "没有拿到任何桩的数据")
 
+    annotate_durations(piles)
+
     by_station = {}
     for pile in piles:
         by_station.setdefault(pile["station"], []).append(pile)
@@ -257,8 +336,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == "/api/status":
-            force = parse_qs(parsed.query).get("force", ["0"])[0] == "1"
+            params = parse_qs(parsed.query)
+            force = params.get("force", ["0"])[0] == "1"
+            include_durations = params.get("durations", ["0"])[0] == "1"
             payload = get_status(force=force)
+            if not include_durations:
+                payload = strip_durations(payload)
             if payload.get("ok"):
                 status = 200
             elif payload.get("error") == "missing_token":
@@ -286,6 +369,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
+    global OCCUPIED
+    OCCUPIED = load_occupied()
     parser = argparse.ArgumentParser(description="Serve the HNU charge map and cached status API.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8791)

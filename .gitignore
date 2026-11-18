@@ -10,3 +10,6 @@ __pycache__/
 # 底图瓦片缓存：版权原因不入库，见 tiles/README.md
 tiles/*
 !tiles/README.md
+
+# 充电占用计时状态（本地开发）
+.state/

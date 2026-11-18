@@ -10,6 +10,8 @@ Group=hnu
 WorkingDirectory=/opt/hnu-charge-map
 EnvironmentFile=-/etc/hnu-charge-map.env
 Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=STATE_FILE=/var/lib/hnu-charge-map/occupied.json
+StateDirectory=hnu-charge-map
 ExecStart=/usr/bin/python3 /opt/hnu-charge-map/server.py --host 127.0.0.1 --port 8791
 Restart=always
 RestartSec=3

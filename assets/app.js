@@ -3,11 +3,21 @@
 
   const DATA = window.HNU_CHARGE_DATA;
   const CONFIG = window.HNU_MAP_CONFIG;
+  const IS_GUEST = window.location.pathname === "/guest" || window.location.pathname.startsWith("/guest/");
+  const readPreference = (key, fallback) => {
+    try {
+      const value = window.localStorage.getItem(key);
+      return value == null ? fallback : value;
+    } catch (error) {
+      return fallback;
+    }
+  };
   const state = {
     selectedStationId: null,
     selectedPileId: null,
     live: null,
     liveError: null,
+    showDurations: !IS_GUEST && readPreference("hnu-show-durations", "1") !== "0",
     map: null,
     pileLayer: null,
     pin: null,
@@ -65,6 +75,60 @@
 
   function stationHasStatus(station) {
     return station.piles.some(pileHasStatus);
+  }
+
+  function slotBusySeconds(slot) {
+    if (!slot || !slot.busySince) return null;
+    const since = new Date(slot.busySince).getTime();
+    if (!Number.isFinite(since)) return null;
+    return Math.max(0, Math.floor((Date.now() - since) / 1000));
+  }
+
+  function formatDurationCompact(seconds) {
+    if (seconds == null) return "";
+    const totalMinutes = Math.floor(seconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes}分`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours < 24) return minutes ? `${hours}h${String(minutes).padStart(2, "0")}` : `${hours}h`;
+    return `${Math.floor(hours / 24)}天${hours % 24}h`;
+  }
+
+  function formatDurationLong(seconds) {
+    if (seconds == null) return "";
+    const totalMinutes = Math.floor(seconds / 60);
+    if (totalMinutes < 60) return `${totalMinutes} 分钟`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours < 24) return minutes ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`;
+    return `${Math.floor(hours / 24)} 天 ${hours % 24} 小时`;
+  }
+
+  function pileLongestBusy(pile) {
+    let longest = null;
+    for (const slot of getPileSlots(pile)) {
+      if (slotIsFree(slot)) continue;
+      const seconds = slotBusySeconds(slot);
+      if (seconds != null && (longest == null || seconds > longest)) longest = seconds;
+    }
+    return longest;
+  }
+
+  function durationSummary(station) {
+    const rows = station.piles
+      .map((pile) => {
+        const busy = getPileSlots(pile).filter((slot) => !slotIsFree(slot)).length;
+        return { pile, busy, seconds: pileLongestBusy(pile) };
+      })
+      .filter((row) => row.seconds != null)
+      .sort((a, b) => b.seconds - a.seconds);
+    if (!rows.length) {
+      return `<section class="duration-summary"><h3>各桩已充电时长</h3><p class="duration-summary__empty">当前没有正在充电的桩</p><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
+    }
+    const items = rows
+      .map((row) => `<li><span>${escapeHtml(row.pile.label)} · ${row.busy} 个口</span><strong>${formatDurationLong(row.seconds)}</strong></li>`)
+      .join("");
+    return `<section class="duration-summary"><h3>各桩已充电时长</h3><ul>${items}</ul><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
   }
 
   function getPileTotal(pile) {
@@ -222,14 +286,18 @@
       `;
     }).join("");
 
+    const showDurations = !IS_GUEST && state.showDurations;
     const portSlots = getPileSlots(pile);
     const ports = portSlots.map((slot) => {
       const free = slotIsFree(slot);
+      const seconds = !free ? slotBusySeconds(slot) : null;
+      const label = free ? "空闲" : (showDurations && seconds != null ? formatDurationCompact(seconds) : "不可用");
+      const title = !free && showDurations && seconds != null ? ` title="已充电 ${formatDurationLong(seconds)}"` : "";
       return `
-        <div class="port ${free ? "port--free" : ""}" aria-label="充电口 ${slot.slotId}，${free ? "空闲" : "不可用"}">
+        <div class="port ${free ? "port--free" : ""}" aria-label="充电口 ${slot.slotId}，${free ? "空闲" : label}"${title}>
           <span class="port__icon">${PLUG_ICON}</span>
           <span class="port__num">${slot.slotId}</span>
-          <span class="port__label">${free ? "空闲" : "不可用"}</span>
+          <span class="port__label">${label}</span>
         </div>
       `;
     }).join("");
@@ -260,6 +328,17 @@
           <div><span>状态时间</span><strong>${time}</strong></div>
         </div>
 
+        ${IS_GUEST ? "" : `
+        <div class="duration-toggle">
+          <div class="duration-toggle__copy">
+            <span class="duration-toggle__label">显示已充电时长</span>
+            <span class="duration-toggle__hint">从首次监测到占用开始计时</span>
+          </div>
+          <button class="switch" type="button" role="switch" aria-checked="${state.showDurations}" aria-label="显示已充电时长" data-action="toggle-durations">
+            <span class="switch__thumb"></span>
+          </button>
+        </div>`}
+
         <div class="ports-head">
           <h3>${escapeHtml(pile.code)} 端口状态</h3>
           <div class="legend" aria-hidden="true">
@@ -269,6 +348,8 @@
         </div>
 
         <div class="port-grid">${ports || '<p class="port-empty">暂无端口数据，接口连通后自动更新</p>'}</div>
+
+        ${showDurations ? durationSummary(station) : ""}
 
         <p class="detail-note">${note}</p>
 
@@ -503,7 +584,11 @@
   }
 
   async function refreshStatus(force = false) {
-    const url = `${CONFIG.liveEndpoint}${force ? "?force=1" : ""}`;
+    const params = new URLSearchParams();
+    if (force) params.set("force", "1");
+    if (!IS_GUEST) params.set("durations", "1");
+    const query = params.toString();
+    const url = `${CONFIG.liveEndpoint}${query ? `?${query}` : ""}`;
     try {
       const response = await fetch(url, { cache: "no-store" });
       const payload = await response.json().catch(() => null);
@@ -607,6 +692,16 @@
       }
       const action = event.target.closest("[data-action]");
       if (!action) return;
+      if (action.dataset.action === "toggle-durations") {
+        state.showDurations = !state.showDurations;
+        try {
+          window.localStorage.setItem("hnu-show-durations", state.showDurations ? "1" : "0");
+        } catch (error) {
+          /* 忽略隐私模式下的存储异常 */
+        }
+        renderDetail();
+        return;
+      }
       if (action.dataset.action === "refresh") {
         showToast("正在请求接口…");
         const ok = await refreshStatus(true);
