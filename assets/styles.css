@@ -1660,6 +1660,15 @@ svg {
 .duration-summary li strong {
   color: var(--green-700);
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.duration-summary li.is-free strong {
+  color: var(--green-700);
+}
+
+.duration-summary li.is-unknown strong {
+  color: var(--amber);
 }
 
 .duration-summary__empty {

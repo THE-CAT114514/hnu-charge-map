@@ -104,31 +104,19 @@
     return `${Math.floor(hours / 24)} 天 ${hours % 24} 小时`;
   }
 
-  function pileLongestBusy(pile) {
-    let longest = null;
-    for (const slot of getPileSlots(pile)) {
-      if (slotIsFree(slot)) continue;
-      const seconds = slotBusySeconds(slot);
-      if (seconds != null && (longest == null || seconds > longest)) longest = seconds;
+  function portDurationList(pile) {
+    const slots = getPileSlots(pile);
+    if (!slots.length) {
+      return `<section class="duration-summary"><h3>${escapeHtml(pile.label)} · 各接口充电时长</h3><p class="duration-summary__empty">暂无接口数据</p></section>`;
     }
-    return longest;
-  }
-
-  function durationSummary(station) {
-    const rows = station.piles
-      .map((pile) => {
-        const busy = getPileSlots(pile).filter((slot) => !slotIsFree(slot)).length;
-        return { pile, busy, seconds: pileLongestBusy(pile) };
-      })
-      .filter((row) => row.seconds != null)
-      .sort((a, b) => b.seconds - a.seconds);
-    if (!rows.length) {
-      return `<section class="duration-summary"><h3>各桩已充电时长</h3><p class="duration-summary__empty">当前没有正在充电的桩</p><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
-    }
-    const items = rows
-      .map((row) => `<li><span>${escapeHtml(row.pile.label)} · ${row.busy} 个口</span><strong>${formatDurationLong(row.seconds)}</strong></li>`)
-      .join("");
-    return `<section class="duration-summary"><h3>各桩已充电时长</h3><ul>${items}</ul><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
+    const items = slots.map((slot) => {
+      const free = slotIsFree(slot);
+      const seconds = free ? null : slotBusySeconds(slot);
+      const value = free ? "空闲" : (seconds != null ? formatDurationLong(seconds) : "占用中");
+      const tone = free ? "is-free" : (seconds != null ? "is-busy" : "is-unknown");
+      return `<li class="${tone}"><span>${slot.slotId} 号口</span><strong>${value}</strong></li>`;
+    }).join("");
+    return `<section class="duration-summary"><h3>${escapeHtml(pile.label)} · 各接口充电时长</h3><ul>${items}</ul><p class="duration-summary__note">从本站首次监测到占用开始计时，仅供参考。</p></section>`;
   }
 
   function getPileTotal(pile) {
@@ -349,7 +337,7 @@
 
         <div class="port-grid">${ports || '<p class="port-empty">暂无端口数据，接口连通后自动更新</p>'}</div>
 
-        ${showDurations ? durationSummary(station) : ""}
+        ${showDurations ? portDurationList(pile) : ""}
 
         <p class="detail-note">${note}</p>
 
